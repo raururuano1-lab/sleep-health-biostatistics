@@ -1,0 +1,2 @@
+tecnica,variable_x,variable_y,n,rho,estadistico_s,p_value,magnitud,direccion,decision_alpha_0_05
+Correlación de Spearman,Nivel de estrés,Calidad del sueño,374,-0.9081470385599754,16636895.510824604,9.707429533503927e-143,muy fuerte,inversa o negativa,se rechaza la hipótesis nula de ausencia de asociación

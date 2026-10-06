@@ -1,0 +1,814 @@
+---
+title: "Análisis Bioestadístico Aplicado al Sleep Health and Lifestyle Dataset"
+author: "Raúl Antonio Ruano Katz — versión de portafolio de un proyecto académico grupal"
+date: "`r format(Sys.Date(), '%d/%m/%Y')`"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+    number_sections: false
+    fig_caption: true
+    latex_engine: xelatex
+fontsize: 11pt
+geometry: margin=1in
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center",
+  fig.width = 7.2,
+  fig.height = 4.8,
+  out.width = "95%"
+)
+
+options(scipen = 999)
+
+# Instalar paquetes solo si fuera necesario. Se deja comentado para evitar reinstalaciones.
+# install.packages(c("tidyverse", "janitor", "skimr", "broom", "knitr"))
+
+library(tidyverse)
+library(janitor)
+library(skimr)
+library(broom)
+library(knitr)
+
+# Tema gráfico general para mejorar la presentación visual.
+tema_bio <- function(base_size = 11) {
+  theme_minimal(base_size = base_size) +
+    theme(
+      plot.title = element_text(face = "bold", size = base_size + 3),
+      plot.subtitle = element_text(size = base_size, margin = margin(b = 8)),
+      plot.caption = element_text(size = base_size - 2, hjust = 0),
+      axis.title = element_text(face = "bold"),
+      panel.grid.minor = element_blank(),
+      legend.position = "bottom",
+      legend.title = element_text(face = "bold")
+    )
+}
+
+paleta_trastorno <- c(
+  "Sin trastorno reportado" = "#2E86AB",
+  "Insomnio" = "#F18F01",
+  "Apnea del sueño" = "#C73E1D"
+)
+
+paleta_imc <- c(
+  "Normal" = "#4E79A7",
+  "Sobrepeso" = "#F28E2B",
+  "Obesidad" = "#E15759"
+)
+```
+
+# A. Presentación de la base de datos
+
+La base de datos seleccionada es **Sleep Health and Lifestyle Dataset**. Es una base relacionada con salud del sueño, hábitos de vida, actividad física, estrés, composición corporal e indicadores fisiológicos. Su utilidad para el trabajo radica en que permite estudiar un problema de interés sanitario: la relación entre el nivel de estrés percibido y la calidad del sueño.
+
+La fuente utilizada corresponde a una base secundaria en formato CSV. El archivo se encuentra dentro de la misma carpeta del proyecto de RStudio; por esa razón, el código utiliza una ruta relativa y no una ubicación específica de la computadora.
+
+```{r lectura-base}
+# Lectura de la base desde la carpeta del RStudio Project.
+# No se usa una ruta absoluta para que el archivo pueda ejecutarse en otra computadora.
+sleep_raw <- read.csv(
+  file.path("data", "sleep_health_and_lifestyle.csv"),
+  stringsAsFactors = FALSE
+)
+
+# Limpieza de nombres de variables:
+# clean_names() convierte los nombres a formato snake_case.
+sleep <- sleep_raw %>%
+  clean_names()
+
+# Dimensiones generales de la base.
+n_registros <- nrow(sleep)
+n_variables <- ncol(sleep)
+
+resumen_base <- tibble(
+  indicador = c("Número de registros", "Número de variables"),
+  valor = c(n_registros, n_variables)
+)
+
+kable(resumen_base, caption = "Resumen general de la base de datos")
+```
+
+La base contiene **`r n_registros` registros** y **`r n_variables` variables**. Cada registro corresponde a una persona evaluada. La selección de esta base se justifica porque permite analizar factores modificables relacionados con el sueño, especialmente estrés, actividad física, peso corporal y hábitos generales.
+
+# Exploración inicial de la base
+
+Antes de seleccionar variables y aplicar pruebas estadísticas, se revisó la estructura general de la base. Esta exploración permite confirmar los nombres de las columnas, el tipo de dato de cada variable y la existencia de posibles inconsistencias iniciales.
+
+```{r exploracion-inicial}
+# Estructura general de la base.
+glimpse(sleep)
+
+# Dimensión de la base.
+dim(sleep)
+
+# Nombres de variables disponibles.
+names(sleep)
+
+# Primeras observaciones.
+head(sleep)
+
+# Resumen general con skimr.
+skim(sleep)
+```
+
+# B. Sujetos, unidad de análisis y variables
+
+Los sujetos de estudio corresponden a personas adultas registradas en la base de datos. La **unidad de análisis** es cada participante individual, ya que cada fila contiene información independiente sobre características sociodemográficas, hábitos de vida, estrés, actividad física, indicadores fisiológicos y sueño.
+
+La población representada puede interpretarse como adultos con diferentes ocupaciones y estilos de vida. Sin embargo, al tratarse de una base secundaria, no debe asumirse que la muestra representa a toda la población adulta. La generalización debe hacerse con prudencia, especialmente porque no se dispone de información completa sobre el proceso de muestreo original.
+
+```{r diccionario-variables}
+diccionario_variables <- tibble(
+  variable_original = c(
+    "Gender", "Age", "Sleep Duration", "Quality of Sleep",
+    "Physical Activity Level", "Stress Level", "BMI Category",
+    "Blood Pressure", "Heart Rate", "Daily Steps", "Sleep Disorder",
+    "Occupation"
+  ),
+  variable_en_r = c(
+    "gender", "age", "sleep_duration", "quality_of_sleep",
+    "physical_activity_level", "stress_level", "bmi_category",
+    "blood_pressure", "heart_rate", "daily_steps", "sleep_disorder",
+    "occupation"
+  ),
+  traduccion = c(
+    "Sexo", "Edad", "Duración del sueño", "Calidad del sueño",
+    "Nivel de actividad física", "Nivel de estrés", "Categoría de IMC",
+    "Presión arterial", "Frecuencia cardíaca", "Pasos diarios",
+    "Trastorno del sueño", "Ocupación"
+  ),
+  funcion_analitica = c(
+    "Variable descriptiva",
+    "Variable de ajuste",
+    "Variable descriptiva del descanso",
+    "Variable dependiente principal",
+    "Variable de ajuste conductual",
+    "Variable independiente principal",
+    "Variable descriptiva del estado nutricional",
+    "Indicador fisiológico complementario",
+    "Indicador fisiológico complementario",
+    "Indicador de actividad cotidiana",
+    "Variable cualitativa de salud del sueño",
+    "Variable sociodemográfica"
+  )
+)
+
+kable(diccionario_variables,
+      caption = "Variables seleccionadas y función dentro del análisis")
+```
+
+La variable dependiente principal es **quality_of_sleep**, que mide la calidad del sueño. La variable independiente principal es **stress_level**, que representa el nivel de estrés percibido. La edad y la actividad física se utilizan como variables de ajuste en el modelo de regresión lineal múltiple.
+
+```{r seleccion-limpieza}
+sleep_sel <- sleep %>%
+  select(
+    gender,
+    age,
+    sleep_duration,
+    quality_of_sleep,
+    physical_activity_level,
+    stress_level,
+    bmi_category,
+    blood_pressure,
+    heart_rate,
+    daily_steps,
+    sleep_disorder,
+    occupation
+  ) %>%
+  mutate(
+    # Recodificación preventiva:
+    # Si la base tuviera valores vacíos o NA en sleep_disorder,
+    # se interpretan como ausencia de trastorno reportado.
+    sleep_disorder_clean = case_when(
+      is.na(sleep_disorder) | trimws(sleep_disorder) == "" ~ "None",
+      TRUE ~ sleep_disorder
+    ),
+
+    # Unificación de categorías equivalentes del IMC.
+    bmi_category = case_when(
+      bmi_category %in% c("Normal", "Normal Weight") ~ "Normal",
+      TRUE ~ bmi_category
+    )
+  ) %>%
+  separate(
+    blood_pressure,
+    into = c("systolic_bp", "diastolic_bp"),
+    sep = "/",
+    convert = TRUE,
+    remove = FALSE
+  ) %>%
+  mutate(
+    gender = factor(gender, levels = c("Female", "Male"),
+                    labels = c("Mujer", "Hombre")),
+    bmi_category = factor(bmi_category,
+                          levels = c("Normal", "Overweight", "Obese"),
+                          labels = c("Normal", "Sobrepeso", "Obesidad")),
+    sleep_disorder_clean = factor(
+      sleep_disorder_clean,
+      levels = c("None", "Insomnia", "Sleep Apnea"),
+      labels = c("Sin trastorno reportado", "Insomnio", "Apnea del sueño")
+    ),
+    occupation = as.factor(occupation)
+  )
+
+glimpse(sleep_sel)
+```
+
+# C. Análisis de coherencia de los datos
+
+La revisión de coherencia permite evaluar si los datos son plausibles antes de aplicar pruebas estadísticas. En esta fase se revisaron valores perdidos, rangos, categorías cualitativas, presión arterial separada en sus dos componentes y posibles valores extremos.
+
+## Valores perdidos
+
+```{r valores-perdidos}
+valores_perdidos <- sleep_sel %>%
+  summarise(across(everything(), ~sum(is.na(.)))) %>%
+  pivot_longer(
+    cols = everything(),
+    names_to = "variable",
+    values_to = "valores_perdidos"
+  ) %>%
+  arrange(desc(valores_perdidos))
+
+kable(valores_perdidos,
+      caption = "Valores perdidos por variable")
+```
+
+En esta ejecución, la base no muestra valores perdidos en las variables principales. Aun así, se mantuvo la variable **sleep_disorder_clean** como una versión estandarizada de **sleep_disorder**, para asegurar que posibles valores vacíos se clasifiquen como ausencia de trastorno reportado.
+
+## Rangos de variables cuantitativas
+
+```{r rangos-cuantitativos}
+vars_cuantitativas <- c(
+  "age",
+  "sleep_duration",
+  "quality_of_sleep",
+  "physical_activity_level",
+  "stress_level",
+  "heart_rate",
+  "daily_steps"
+)
+
+rangos_cuantitativos <- sleep_sel %>%
+  summarise(across(
+    all_of(vars_cuantitativas),
+    list(
+      minimo = ~min(.x, na.rm = TRUE),
+      maximo = ~max(.x, na.rm = TRUE),
+      media = ~mean(.x, na.rm = TRUE),
+      mediana = ~median(.x, na.rm = TRUE)
+    )
+  )) %>%
+  pivot_longer(
+    cols = everything(),
+    names_to = "variable_estadistico",
+    values_to = "valor"
+  ) %>%
+  separate(
+    variable_estadistico,
+    into = c("variable", "estadistico"),
+    sep = "_(?=[^_]+$)"
+  ) %>%
+  pivot_wider(names_from = estadistico, values_from = valor)
+
+kable(rangos_cuantitativos,
+      digits = 2,
+      caption = "Rangos y medidas centrales observadas en variables cuantitativas")
+```
+
+Los rangos observados son compatibles con valores esperados para adultos. La edad se ubica entre `r min(sleep_sel$age)` y `r max(sleep_sel$age)` años; la duración del sueño se encuentra entre `r min(sleep_sel$sleep_duration)` y `r max(sleep_sel$sleep_duration)` horas; y la calidad del sueño se distribuye entre `r min(sleep_sel$quality_of_sleep)` y `r max(sleep_sel$quality_of_sleep)` puntos. Estos resultados sugieren que no hay errores evidentes de captura en las variables centrales.
+
+## Revisión de presión arterial
+
+```{r presion-arterial}
+presion_resumen <- sleep_sel %>%
+  summarise(
+    sistolica_min = min(systolic_bp, na.rm = TRUE),
+    sistolica_max = max(systolic_bp, na.rm = TRUE),
+    sistolica_media = mean(systolic_bp, na.rm = TRUE),
+    diastolica_min = min(diastolic_bp, na.rm = TRUE),
+    diastolica_max = max(diastolic_bp, na.rm = TRUE),
+    diastolica_media = mean(diastolic_bp, na.rm = TRUE)
+  )
+
+kable(presion_resumen,
+      digits = 2,
+      caption = "Resumen de presión arterial sistólica y diastólica")
+```
+
+La presión arterial se encontraba almacenada como texto en el formato sistólica/diastólica. Para hacerla más útil, se separó en dos variables numéricas: **systolic_bp** y **diastolic_bp**. Esta transformación mejora la trazabilidad del análisis y permite revisar la plausibilidad de este indicador fisiológico.
+
+## Revisión de categorías cualitativas
+
+```{r frecuencia-funcion}
+tabla_frecuencia <- function(datos, variable, nombre_variable) {
+  datos %>%
+    count({{ variable }}, name = "frecuencia") %>%
+    mutate(
+      porcentaje = round(frecuencia / sum(frecuencia) * 100, 2),
+      variable = nombre_variable
+    ) %>%
+    rename(categoria = {{ variable }}) %>%
+    mutate(categoria = as.character(categoria)) %>%
+    select(variable, categoria, frecuencia, porcentaje)
+}
+```
+
+```{r categorias-cualitativas}
+categorias_resumen <- bind_rows(
+  tabla_frecuencia(sleep_sel, gender, "Sexo"),
+  tabla_frecuencia(sleep_sel, bmi_category, "Categoría de IMC"),
+  tabla_frecuencia(sleep_sel, sleep_disorder_clean, "Trastorno del sueño")
+)
+
+kable(categorias_resumen,
+      caption = "Revisión de categorías cualitativas principales")
+```
+
+La revisión confirma que el sexo está prácticamente equilibrado entre mujeres y hombres. En el IMC, la categoría **Normal** concentra la mayor proporción, seguida de **Sobrepeso**. En trastornos del sueño, la mayor parte de participantes aparece sin trastorno reportado, aunque también se observan grupos con insomnio y apnea del sueño.
+
+## Revisión de valores extremos
+
+```{r funcion-outliers}
+contar_outliers <- function(x) {
+  q1 <- quantile(x, 0.25, na.rm = TRUE)
+  q3 <- quantile(x, 0.75, na.rm = TRUE)
+  riq <- q3 - q1
+  limite_inferior <- q1 - 1.5 * riq
+  limite_superior <- q3 + 1.5 * riq
+
+  tibble(
+    limite_inferior = limite_inferior,
+    limite_superior = limite_superior,
+    posibles_valores_extremos = sum(
+      x < limite_inferior | x > limite_superior,
+      na.rm = TRUE
+    )
+  )
+}
+
+outliers_tbl <- map_dfr(
+  vars_cuantitativas,
+  ~contar_outliers(sleep_sel[[.x]]) %>%
+    mutate(variable = .x),
+  .id = NULL
+) %>%
+  select(variable, limite_inferior, limite_superior, posibles_valores_extremos)
+
+kable(outliers_tbl,
+      digits = 2,
+      caption = "Posibles valores extremos según el criterio del rango intercuartílico")
+```
+
+```{r grafico-outliers, fig.cap="Figura 1. Revisión visual de posibles valores extremos en variables cuantitativas."}
+sleep_sel %>%
+  select(all_of(vars_cuantitativas)) %>%
+  pivot_longer(
+    cols = everything(),
+    names_to = "variable",
+    values_to = "valor"
+  ) %>%
+  ggplot(aes(x = variable, y = valor)) +
+  geom_boxplot(fill = "#A9CCE3", color = "#1B4F72", outlier.color = "#C0392B") +
+  facet_wrap(~ variable, scales = "free", ncol = 3) +
+  labs(
+    title = "Revisión gráfica de valores extremos",
+    subtitle = "Criterio visual mediante diagramas de caja por variable",
+    x = NULL,
+    y = "Valor observado",
+    caption = "Nota. Un valor extremo no necesariamente representa un error; puede ser una observación real."
+  ) +
+  tema_bio() +
+  theme(axis.text.x = element_blank())
+```
+
+La frecuencia cardíaca presenta algunos valores extremos según el criterio del rango intercuartílico. Esto no significa automáticamente que sean errores, ya que pueden corresponder a participantes con frecuencias cardíacas más altas. No obstante, estos valores deben mencionarse como una limitación potencial y considerarse al interpretar los análisis.
+
+# D. Análisis descriptivo
+
+El análisis descriptivo resume las características principales de la muestra. Para variables cuantitativas se calcularon media, mediana, desviación estándar, mínimo y máximo. Para variables cualitativas se calcularon frecuencias y porcentajes.
+
+## Variables cuantitativas
+
+```{r resumen-cuantitativo}
+resumen_cuantitativo <- function(datos, variables) {
+  datos %>%
+    select(all_of(variables)) %>%
+    pivot_longer(
+      cols = everything(),
+      names_to = "variable",
+      values_to = "valor"
+    ) %>%
+    group_by(variable) %>%
+    summarise(
+      n = sum(!is.na(valor)),
+      media = mean(valor, na.rm = TRUE),
+      mediana = median(valor, na.rm = TRUE),
+      desviacion_estandar = sd(valor, na.rm = TRUE),
+      minimo = min(valor, na.rm = TRUE),
+      maximo = max(valor, na.rm = TRUE),
+      .groups = "drop"
+    )
+}
+
+tabla_cuantitativa <- resumen_cuantitativo(sleep_sel, vars_cuantitativas)
+
+kable(tabla_cuantitativa,
+      digits = 2,
+      caption = "Estadísticos descriptivos de variables cuantitativas")
+```
+
+La media de duración del sueño fue de **`r round(mean(sleep_sel$sleep_duration), 2)` horas**, mientras que la mediana fue de **`r round(median(sleep_sel$sleep_duration), 2)` horas**. La cercanía entre media y mediana sugiere que la duración del sueño no presenta una asimetría extrema. La calidad del sueño tuvo una media de **`r round(mean(sleep_sel$quality_of_sleep), 2)` puntos**, lo que indica una percepción general moderadamente favorable del descanso en la muestra.
+
+El nivel de estrés presentó una media de **`r round(mean(sleep_sel$stress_level), 2)` puntos** y una mediana de **`r round(median(sleep_sel$stress_level), 2)` puntos**. Esta variable es central para el análisis porque representa el principal factor explicativo de interés. La actividad física y los pasos diarios también muestran variabilidad, lo cual permite explorar diferencias conductuales entre participantes.
+
+## Variables cualitativas
+
+```{r tablas-cualitativas}
+tabla_sexo <- tabla_frecuencia(sleep_sel, gender, "Sexo")
+tabla_imc <- tabla_frecuencia(sleep_sel, bmi_category, "Categoría de IMC")
+tabla_trastorno <- tabla_frecuencia(sleep_sel, sleep_disorder_clean, "Trastorno del sueño")
+tabla_ocupacion <- tabla_frecuencia(sleep_sel, occupation, "Ocupación") %>%
+  arrange(desc(frecuencia))
+
+kable(tabla_sexo,
+      caption = "Frecuencia y porcentaje de participantes según sexo")
+
+kable(tabla_imc,
+      caption = "Frecuencia y porcentaje según categoría de IMC")
+
+kable(tabla_trastorno,
+      caption = "Frecuencia y porcentaje según trastorno del sueño")
+
+kable(tabla_ocupacion,
+      caption = "Frecuencia y porcentaje según ocupación")
+```
+
+```{r indicadores-descriptivos, include=FALSE}
+trastorno_principal <- tabla_trastorno %>%
+  slice_max(frecuencia, n = 1, with_ties = FALSE)
+
+imc_principal <- tabla_imc %>%
+  slice_max(frecuencia, n = 1, with_ties = FALSE)
+
+ocupacion_principal <- tabla_ocupacion %>%
+  slice_max(frecuencia, n = 1, with_ties = FALSE)
+```
+
+La categoría más frecuente de trastorno del sueño fue **`r trastorno_principal$categoria`**, con **`r trastorno_principal$frecuencia` participantes**, equivalente al **`r trastorno_principal$porcentaje`%**. En IMC, la categoría predominante fue **`r imc_principal$categoria`**, con **`r imc_principal$porcentaje`%**. La ocupación con mayor representación fue **`r ocupacion_principal$categoria`**, lo que debe tomarse en cuenta al discutir la generalización de resultados.
+
+# E. Visualización de datos
+
+Las visualizaciones se diseñaron para apoyar la interpretación y la presentación del video. Se incluyeron gráficos con títulos, subtítulos, etiquetas y notas interpretativas.
+
+## Gráfico 1. Distribución de la duración del sueño
+
+```{r grafico-histograma-sueno, fig.cap="Figura 2. Distribución de la duración del sueño en horas promedio."}
+media_sueno <- mean(sleep_sel$sleep_duration, na.rm = TRUE)
+mediana_sueno <- median(sleep_sel$sleep_duration, na.rm = TRUE)
+
+ggplot(sleep_sel, aes(x = sleep_duration)) +
+  geom_histogram(
+    binwidth = 0.25,
+    color = "white",
+    fill = "#4E79A7"
+  ) +
+  geom_vline(
+    xintercept = media_sueno,
+    linetype = "dashed",
+    linewidth = 1,
+    color = "#E15759"
+  ) +
+  geom_vline(
+    xintercept = mediana_sueno,
+    linetype = "dotted",
+    linewidth = 1,
+    color = "#59A14F"
+  ) +
+  labs(
+    title = "Distribución de la duración del sueño",
+    subtitle = paste0(
+      "Media = ", round(media_sueno, 2),
+      " horas; mediana = ", round(mediana_sueno, 2), " horas"
+    ),
+    x = "Horas promedio de sueño",
+    y = "Frecuencia",
+    caption = "Línea roja discontinua = media; línea verde punteada = mediana."
+  ) +
+  tema_bio()
+```
+
+El histograma muestra cómo se distribuyen las horas promedio de sueño. La concentración de observaciones alrededor de 6 a 8 horas sugiere que la mayoría de participantes reporta una duración cercana a rangos habituales de descanso adulto. La presencia de valores por debajo de 6 horas merece atención porque puede representar un subgrupo con menor tiempo de recuperación.
+
+## Gráfico 2. Frecuencia de trastornos del sueño
+
+```{r grafico-barras-trastorno, fig.cap="Figura 3. Frecuencia y porcentaje de trastornos del sueño."}
+tabla_trastorno %>%
+  mutate(
+    categoria = fct_reorder(categoria, frecuencia)
+  ) %>%
+  ggplot(aes(x = categoria, y = frecuencia, fill = categoria)) +
+  geom_col(width = 0.65) +
+  geom_text(
+    aes(label = paste0(frecuencia, " (", porcentaje, "%)")),
+    hjust = -0.05,
+    size = 3.5
+  ) +
+  coord_flip() +
+  scale_fill_manual(values = paleta_trastorno, guide = "none") +
+  scale_y_continuous(
+    expand = expansion(mult = c(0, 0.15))
+  ) +
+  labs(
+    title = "Distribución de trastornos del sueño",
+    subtitle = "Comparación entre ausencia de trastorno, insomnio y apnea del sueño",
+    x = NULL,
+    y = "Número de participantes",
+    caption = "Los porcentajes se calcularon sobre el total de participantes de la base."
+  ) +
+  tema_bio()
+```
+
+El gráfico evidencia que la mayor parte de participantes no reporta trastorno del sueño. Sin embargo, los grupos con insomnio y apnea del sueño no son marginales, por lo que deben considerarse relevantes desde el punto de vista sanitario. Esta distribución también justifica analizar variables relacionadas con la calidad del sueño, aunque la pregunta principal se centre en el estrés.
+
+## Gráfico 3. Calidad del sueño según categoría de IMC
+
+```{r grafico-boxplot-imc, fig.cap="Figura 4. Comparación de la calidad del sueño según categoría de IMC."}
+ggplot(sleep_sel, aes(x = bmi_category, y = quality_of_sleep, fill = bmi_category)) +
+  geom_boxplot(
+    width = 0.55,
+    alpha = 0.85,
+    outlier.shape = 21,
+    outlier.fill = "white",
+    outlier.color = "#C0392B"
+  ) +
+  geom_jitter(
+    width = 0.10,
+    alpha = 0.25,
+    size = 1.5
+  ) +
+  stat_summary(
+    fun = median,
+    geom = "point",
+    shape = 23,
+    size = 3,
+    fill = "white"
+  ) +
+  scale_fill_manual(values = paleta_imc, guide = "none") +
+  labs(
+    title = "Calidad del sueño según categoría de IMC",
+    subtitle = "El punto blanco representa la mediana de cada grupo",
+    x = "Categoría de IMC",
+    y = "Calidad del sueño",
+    caption = "La comparación es descriptiva; no implica causalidad ni prueba diferencias ajustadas."
+  ) +
+  tema_bio()
+```
+
+Este gráfico permite observar diferencias descriptivas de calidad del sueño entre categorías de IMC. Si las medianas son más bajas en sobrepeso u obesidad, ello puede sugerir una posible relación entre estado nutricional y descanso; sin embargo, el tamaño de cada grupo y la ausencia de seguimiento temporal limitan cualquier interpretación causal.
+
+## Gráfico 4. Relación entre nivel de estrés y calidad del sueño
+
+```{r grafico-dispersion-estres, fig.cap="Figura 5. Relación entre nivel de estrés percibido y calidad del sueño."}
+rho_grafico <- cor(
+  sleep_sel$stress_level,
+  sleep_sel$quality_of_sleep,
+  method = "spearman",
+  use = "complete.obs"
+)
+
+ggplot(sleep_sel, aes(x = stress_level, y = quality_of_sleep)) +
+  geom_jitter(
+    width = 0.08,
+    height = 0.08,
+    alpha = 0.55,
+    size = 2,
+    color = "#2E86AB"
+  ) +
+  geom_smooth(
+    method = "lm",
+    se = TRUE,
+    linewidth = 1,
+    color = "#C73E1D",
+    fill = "#F4A261",
+    alpha = 0.25
+  ) +
+  annotate(
+    "label",
+    x = min(sleep_sel$stress_level),
+    y = max(sleep_sel$quality_of_sleep),
+    hjust = 0,
+    vjust = 1,
+    label = paste0("rho de Spearman = ", round(rho_grafico, 3)),
+    size = 3.5
+  ) +
+  labs(
+    title = "A mayor estrés, menor calidad del sueño",
+    subtitle = "Gráfico de dispersión con tendencia lineal exploratoria",
+    x = "Nivel de estrés percibido",
+    y = "Calidad del sueño",
+    caption = "Los puntos tienen ligera dispersión artificial para evitar sobreposición visual."
+  ) +
+  tema_bio()
+```
+
+El gráfico muestra una tendencia descendente entre estrés y calidad del sueño. Esto significa que, conforme aumenta el nivel de estrés, las puntuaciones de calidad del sueño tienden a disminuir. Esta observación visual respalda la aplicación posterior de la correlación de Spearman.
+
+# F. Relación con el diseño de investigación
+
+La estructura de esta base corresponde a un diseño **observacional, analítico y transversal**. Es observacional porque el investigador no asigna exposiciones ni intervenciones; es analítico porque se evalúa la relación entre variables; y es transversal porque la medición de estrés, sueño, actividad física y demás características ocurre en un único momento para cada participante.
+
+Este diseño es adecuado para describir la muestra y explorar asociaciones. No obstante, no permite establecer temporalidad. Por ejemplo, si se observa que las personas con más estrés tienen peor calidad del sueño, no se puede asegurar si el estrés precedió a la mala calidad del sueño o si dormir mal aumentó la percepción de estrés. Por ello, los resultados deben entenderse como evidencia de asociación y no como prueba de causalidad.
+
+# G. Pregunta de investigación
+
+La pregunta de investigación planteada es:
+
+**¿Existe relación entre el nivel de estrés percibido y la calidad del sueño en los participantes del Sleep Health and Lifestyle Dataset?**
+
+Esta pregunta es coherente con la información disponible, ya que ambas variables se encuentran medidas para todos los participantes y pueden analizarse mediante una técnica de asociación.
+
+# H. Aplicación de una técnica bioestadística
+
+Para responder la pregunta se utilizó como técnica principal la **correlación de Spearman**. Esta prueba es apropiada porque el nivel de estrés y la calidad del sueño son escalas numéricas discretas, con valores acotados, y no es necesario asumir una distribución normal estricta.
+
+## Correlación de Spearman
+
+```{r correlacion-spearman}
+cor_spearman <- cor.test(
+  sleep_sel$stress_level,
+  sleep_sel$quality_of_sleep,
+  method = "spearman",
+  exact = FALSE
+)
+
+# Llamada explícita de la prueba solicitada:
+cor.test(
+  sleep_sel$stress_level,
+  sleep_sel$quality_of_sleep,
+  method = "spearman",
+  exact = FALSE
+)
+
+rho_spearman <- unname(cor_spearman$estimate)
+p_spearman <- cor_spearman$p.value
+```
+
+```{r interpretacion-spearman, include=FALSE}
+magnitud_spearman <- case_when(
+  abs(rho_spearman) < 0.10 ~ "muy débil",
+  abs(rho_spearman) < 0.30 ~ "débil",
+  abs(rho_spearman) < 0.50 ~ "moderada",
+  abs(rho_spearman) < 0.70 ~ "fuerte",
+  TRUE ~ "muy fuerte"
+)
+
+direccion_spearman <- ifelse(
+  rho_spearman < 0,
+  "inversa o negativa",
+  "directa o positiva"
+)
+
+decision_spearman <- ifelse(
+  p_spearman < 0.05,
+  "se rechaza la hipótesis nula de ausencia de asociación",
+  "no se rechaza la hipótesis nula de ausencia de asociación"
+)
+```
+
+El coeficiente de Spearman fue **rho = `r round(rho_spearman, 3)`**, con un valor p de **`r format.pval(p_spearman, digits = 3, eps = 0.001)`**. La asociación observada es **`r magnitud_spearman`** y de dirección **`r direccion_spearman`**. Con un nivel de significancia de 0.05, **`r decision_spearman`**.
+
+En términos prácticos, si el coeficiente es negativo, se interpreta que los participantes con mayor nivel de estrés tienden a presentar menor calidad del sueño. Este resultado responde directamente la pregunta de investigación, aunque debe recordarse que la correlación no demuestra causalidad.
+
+## Técnica complementaria: regresión lineal múltiple
+
+La regresión lineal múltiple se utilizó como técnica complementaria para evaluar si la relación entre estrés y calidad del sueño se mantiene al considerar simultáneamente edad y actividad física. La ecuación general del modelo es:
+
+\[
+Calidad\ del\ sueño = \beta_0 + \beta_1(Estrés) + \beta_2(Edad) + \beta_3(Actividad\ física) + \varepsilon
+\]
+
+```{r modelo-lineal}
+modelo_sleep <- lm(
+  quality_of_sleep ~ stress_level + age + physical_activity_level,
+  data = sleep_sel
+)
+
+summary(modelo_sleep)
+```
+
+```{r tablas-modelo}
+modelo_tidy <- broom::tidy(modelo_sleep, conf.int = TRUE) %>%
+  mutate(
+    term = recode(
+      term,
+      "(Intercept)" = "Intercepto",
+      "stress_level" = "Nivel de estrés",
+      "age" = "Edad",
+      "physical_activity_level" = "Actividad física"
+    )
+  )
+
+modelo_glance <- broom::glance(modelo_sleep)
+
+kable(modelo_tidy,
+      digits = 4,
+      caption = "Coeficientes del modelo de regresión lineal múltiple")
+
+kable(modelo_glance,
+      digits = 4,
+      caption = "Indicadores generales del modelo")
+```
+
+```{r indicadores-modelo, include=FALSE}
+coef_estres <- modelo_tidy %>%
+  filter(term == "Nivel de estrés") %>%
+  pull(estimate)
+
+p_estres <- modelo_tidy %>%
+  filter(term == "Nivel de estrés") %>%
+  pull(p.value)
+
+r2_ajustado <- modelo_glance$adj.r.squared
+
+decision_modelo <- ifelse(
+  p_estres < 0.05,
+  "estadísticamente significativa",
+  "no estadísticamente significativa"
+)
+```
+
+En el modelo de regresión, el coeficiente del nivel de estrés fue **`r round(coef_estres, 3)`**, con un valor p de **`r format.pval(p_estres, digits = 3, eps = 0.001)`**. El R cuadrado ajustado fue **`r round(r2_ajustado, 3)`**. Esto indica que la relación entre estrés y calidad del sueño es **`r decision_modelo`** después de ajustar por edad y actividad física.
+
+Si el coeficiente de estrés es negativo, se interpreta que por cada punto adicional en el nivel de estrés, la calidad del sueño disminuye en promedio, manteniendo constantes la edad y la actividad física. La actividad física y la edad se incluyen como variables de ajuste porque pueden influir en el sueño y, por tanto, deben considerarse al interpretar la relación principal.
+
+## Revisión gráfica del modelo
+
+```{r diagnostico-modelo, fig.cap="Figura 6. Residuos del modelo de regresión lineal múltiple."}
+broom::augment(modelo_sleep) %>%
+  ggplot(aes(x = .fitted, y = .resid)) +
+  geom_point(alpha = 0.55, color = "#2E86AB") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "#C73E1D") +
+  labs(
+    title = "Revisión visual de residuos del modelo",
+    subtitle = "Los residuos deberían distribuirse alrededor de cero",
+    x = "Valores ajustados",
+    y = "Residuos",
+    caption = "Este gráfico permite revisar de forma exploratoria el comportamiento del error del modelo."
+  ) +
+  tema_bio()
+```
+
+La revisión de residuos permite evaluar de forma exploratoria si el modelo lineal presenta patrones problemáticos. Si los residuos se distribuyen alrededor de cero sin una forma muy marcada, el ajuste puede considerarse razonable para fines descriptivos y explicativos. Aun así, el modelo no debe interpretarse como causal, debido al diseño transversal.
+
+# I. Interpretación y discusión de resultados
+
+Los resultados muestran que la muestra está integrada por **`r n_registros` participantes** adultos con información completa sobre variables de sueño, estrés, actividad física e indicadores fisiológicos. La distribución por sexo es equilibrada, lo cual mejora la descripción general de la muestra, aunque no garantiza representatividad poblacional. Además, la mayoría de participantes se ubica en la categoría de IMC **`r imc_principal$categoria`**, pero existe un grupo considerable con sobrepeso, aspecto relevante porque el estado nutricional puede relacionarse con trastornos del sueño.
+
+Desde el análisis descriptivo, la duración promedio del sueño fue de **`r round(media_sueno, 2)` horas**. Este valor sugiere que, en conjunto, la muestra reporta una duración cercana a rangos habituales de descanso adulto. Sin embargo, el mínimo observado indica que existen participantes con menor duración de sueño, lo cual puede tener importancia sanitaria si se interpreta como posible privación de descanso. La calidad promedio del sueño fue de **`r round(mean(sleep_sel$quality_of_sleep), 2)` puntos**, por lo que la muestra no parece concentrarse exclusivamente en mala calidad del sueño, sino en un rango intermedio a favorable.
+
+El hallazgo principal del análisis es la relación inversa entre el nivel de estrés y la calidad del sueño. La correlación de Spearman indicó una asociación **`r magnitud_spearman`** y **`r direccion_spearman`**, con un valor p **`r format.pval(p_spearman, digits = 3, eps = 0.001)`**. Esto significa que, dentro de esta base, los participantes con mayores puntuaciones de estrés tienden a reportar menor calidad del sueño. Este resultado es coherente con el gráfico de dispersión, donde la tendencia general es descendente.
+
+La regresión lineal múltiple fortalece la interpretación porque evalúa el efecto del estrés considerando simultáneamente edad y actividad física. El coeficiente de estrés fue **`r round(coef_estres, 3)`**, lo que indica que el aumento de un punto en estrés se asocia con una reducción promedio en la calidad del sueño, manteniendo constantes las variables de ajuste. El R cuadrado ajustado de **`r round(r2_ajustado, 3)`** indica que el modelo explica una proporción relevante de la variabilidad de la calidad del sueño, aunque todavía pueden existir factores no incluidos.
+
+El hallazgo más relevante es que el estrés se mantiene como un factor asociado a la calidad del sueño incluso al ajustar por edad y actividad física. Esto permite plantear que el estrés percibido tiene un papel importante dentro del perfil de salud del sueño de la muestra. Sin embargo, también debe considerarse que la actividad física puede actuar como un factor protector o de ajuste, y que el IMC y los trastornos del sueño pueden modificar la forma en que se experimenta el descanso.
+
+No se puede establecer causalidad. El diseño transversal impide determinar si el estrés conduce a mala calidad del sueño, si dormir mal aumenta el estrés, o si ambas condiciones están influidas por otros factores no observados, como carga laboral, turnos nocturnos, consumo de cafeína, ansiedad, enfermedades crónicas o uso de medicamentos. Por ello, las conclusiones deben limitarse a asociaciones estadísticas observadas en la base analizada.
+
+Otra limitación importante es la naturaleza secundaria de la base. Algunas variables pueden depender del autorreporte, lo que introduce posible sesgo de medición. Además, la distribución de ocupaciones no es homogénea: algunas profesiones tienen muchos participantes y otras tienen muy pocos. Esto reduce la posibilidad de hacer inferencias firmes por ocupación y limita la generalización hacia otros grupos poblacionales.
+
+En síntesis, los resultados son útiles para describir el patrón de asociación entre estrés y calidad del sueño en esta muestra. También sirven como base para formular hipótesis futuras. Para confirmar causalidad sería necesario un diseño longitudinal, con seguimiento temporal, medición repetida del sueño y control de variables clínicas, psicológicas y laborales.
+
+# J. Conclusiones
+
+1. La base **Sleep Health and Lifestyle Dataset** permitió analizar variables relacionadas con duración del sueño, calidad del sueño, estrés, actividad física, IMC, presión arterial, frecuencia cardíaca y trastornos del sueño.
+
+2. La muestra presentó **`r n_registros` registros** y **`r n_variables` variables**, con datos completos en las variables principales utilizadas para el análisis.
+
+3. El análisis descriptivo mostró que la duración media del sueño fue de **`r round(media_sueno, 2)` horas** y que la calidad media del sueño fue de **`r round(mean(sleep_sel$quality_of_sleep), 2)` puntos**.
+
+4. La correlación de Spearman evidenció una asociación **`r direccion_spearman`** entre estrés y calidad del sueño, con rho = **`r round(rho_spearman, 3)`** y valor p = **`r format.pval(p_spearman, digits = 3, eps = 0.001)`**.
+
+5. El modelo de regresión lineal múltiple mostró que el nivel de estrés se asocia con la calidad del sueño incluso después de considerar edad y actividad física.
+
+6. Debido al diseño transversal, los resultados no permiten afirmar que el estrés cause menor calidad del sueño. Únicamente permiten concluir que existe una asociación estadística en la muestra analizada.
+
+# K. Reflexión final
+
+El trabajo con una base de datos real permitió aplicar de forma integrada conceptos de Bioestadística, limpieza de datos, clasificación de variables, análisis descriptivo, visualización, correlación y regresión lineal. La práctica mostró que el análisis estadístico no consiste solo en ejecutar código, sino en revisar la coherencia de los datos y seleccionar técnicas acordes con la pregunta de investigación.
+
+Una dificultad importante fue decidir cómo tratar variables categóricas con posibles inconsistencias, como las categorías de IMC, y cómo interpretar la variable de trastorno del sueño. También fue necesario recordar que la significancia estadística no equivale a causalidad, especialmente cuando se trabaja con datos transversales.
+
+Los conceptos más útiles fueron la identificación de la unidad de análisis, la diferenciación entre variables cuantitativas y cualitativas, la interpretación del coeficiente de Spearman, el uso de modelos de regresión y la discusión crítica de limitaciones. Estos elementos permiten transformar una base de datos en evidencia analítica útil, pero siempre con prudencia metodológica.
+
+# L. Declaración del uso de inteligencia artificial
+Para el desarrollo de este trabajo se utilizó una herramienta de inteligencia artificial, específicamente ChatGPT, como apoyo técnico en la mejora de la presentación del archivo R Markdown (base para elaborar la presentación y el video). Su uso se orientó principalmente a mejorar la estética de los gráficos elaborados en ggplot2, incorporando colores, títulos, subtítulos, etiquetas más claras y elementos visuales que facilitaran la interpretación de los resultados.
+
+El objetivo de su utilización fue hacer que las visualizaciones fueran más comprensibles y adecuadas para la presentación del análisis bioestadístico, sin modificar el sentido de los resultados obtenidos. Asimismo, la herramienta se utilizó para corregir errores de sintaxis y renderizado que surgieron al trasladar el código trabajado en R hacia un documento en formato R Markdown, especialmente en la organización de los bloques de código, el YAML inicial, las tablas y la salida final en PDF.
+
+La justificación de su uso se basa en que estas herramientas pueden apoyar la edición técnica, la presentación visual y la corrección de errores de formato, siempre que el análisis, la interpretación y las conclusiones sean revisados por los integrantes del grupo. La validez y coherencia de la información se verificaron mediante la ejecución del código en RStudio, la revisión de las salidas estadísticas, la comparación con la base CSV original y la confirmación de que los gráficos, tablas e interpretaciones coincidieran con los resultados reales obtenidos.

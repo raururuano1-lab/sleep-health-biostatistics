@@ -1,0 +1,9 @@
+variable,categoria,frecuencia,porcentaje
+Sexo,Mujer,185,49.47
+Sexo,Hombre,189,50.53
+Categoría de IMC,Normal,216,57.75
+Categoría de IMC,Sobrepeso,148,39.57
+Categoría de IMC,Obesidad,10,2.67
+Trastorno del sueño,Sin trastorno reportado,219,58.56
+Trastorno del sueño,Insomnio,77,20.59
+Trastorno del sueño,Apnea del sueño,78,20.86

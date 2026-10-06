@@ -1,0 +1,16 @@
+variable,valores_perdidos
+gender,0
+age,0
+sleep_duration,0
+quality_of_sleep,0
+physical_activity_level,0
+stress_level,0
+bmi_category,0
+blood_pressure,0
+systolic_bp,0
+diastolic_bp,0
+heart_rate,0
+daily_steps,0
+sleep_disorder,0
+occupation,0
+sleep_disorder_clean,0

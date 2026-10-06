@@ -1,0 +1,8 @@
+variable,limite_inferior,limite_superior,posibles_valores_extremos
+age,13.125,72.125,0
+sleep_duration,4.300000000000001,9.899999999999999,0
+quality_of_sleep,3,11,0
+physical_activity_level,0,120,0
+stress_level,-0.5,11.5,0
+heart_rate,62,78,15
+daily_steps,2000,11600,0

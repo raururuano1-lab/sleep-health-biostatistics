@@ -1,0 +1,13 @@
+variable_original,variable_en_r,traduccion,funcion_analitica
+Gender,gender,Sexo,Variable descriptiva
+Age,age,Edad,Variable de ajuste
+Sleep Duration,sleep_duration,Duración del sueño,Variable descriptiva del descanso
+Quality of Sleep,quality_of_sleep,Calidad del sueño,Variable dependiente principal
+Physical Activity Level,physical_activity_level,Nivel de actividad física,Variable de ajuste conductual
+Stress Level,stress_level,Nivel de estrés,Variable independiente principal
+BMI Category,bmi_category,Categoría de IMC,Variable descriptiva del estado nutricional
+Blood Pressure,blood_pressure,Presión arterial,Indicador fisiológico complementario
+Heart Rate,heart_rate,Frecuencia cardíaca,Indicador fisiológico complementario
+Daily Steps,daily_steps,Pasos diarios,Indicador de actividad cotidiana
+Sleep Disorder,sleep_disorder,Trastorno del sueño,Variable cualitativa de salud del sueño
+Occupation,occupation,Ocupación,Variable sociodemográfica

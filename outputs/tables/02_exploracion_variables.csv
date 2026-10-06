@@ -1,0 +1,14 @@
+variable,tipo,valores_perdidos,valores_unicos,ejemplo,media,minimo,maximo
+person_id,integer,0,374,1,187.5,1,374
+gender,character,0,2,Male,,,
+age,integer,0,31,27,42.18449197860963,27,59
+occupation,character,0,11,Software Engineer,,,
+sleep_duration,numeric,0,27,6.1,7.132085561497326,5.8,8.5
+quality_of_sleep,integer,0,6,6,7.31283422459893,4,9
+physical_activity_level,integer,0,16,42,59.17112299465241,30,90
+stress_level,integer,0,6,6,5.385026737967914,3,8
+bmi_category,character,0,4,Overweight,,,
+blood_pressure,character,0,25,126/83,,,
+heart_rate,integer,0,19,77,70.16577540106952,65,86
+daily_steps,integer,0,20,4200,6816.844919786096,3000,10000
+sleep_disorder,character,0,3,None,,,
